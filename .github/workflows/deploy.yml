@@ -2,7 +2,7 @@ name: Build and Deploy to Kubernetes
 
 on:
   push:
-    branches: [ main ]
+    branches: [ feature-1 ]
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
