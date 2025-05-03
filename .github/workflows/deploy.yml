@@ -10,7 +10,7 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -20,7 +20,8 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '21'
-          distribution: 'corretto'
+          distribution: 'temurin'
+          cache: gradle
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
@@ -41,14 +42,16 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/spring-app:${{ github.sha }}
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
+      - name: Verify kubectl configuration
+        run: kubectl cluster-info
+#      - name: Set up kubectl
+#        uses: azure/setup-kubectl@v3
 
-      - name: Create kubeconfig
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+#      - name: Create kubeconfig
+#        run: |
+#          mkdir -p $HOME/.kube
+#          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+#          chmod 600 $HOME/.kube/config
 
       - name: Deploy PostgreSQL to Kubernetes
         run: |
