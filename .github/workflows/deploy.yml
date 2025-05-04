@@ -2,7 +2,7 @@ name: Build and Deploy to Kubernetes
 
 on:
   push:
-    branches: [ feature-1 ]
+    branches: [ main, feature-1 ]
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -42,16 +42,18 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/spring-app:${{ github.sha }}
 
+#      If slh hosted will not work try to use OSI cloud
+#      - name: Set up kubectl for OCI
+#        uses: oracle-actions/setup-kubectl-oci@v1.0.1
+#        with:
+#          oci-config-path: ${{ secrets.OCI_CONFIG_PATH }}
+#          oci-key-path: ${{ secrets.OCI_KEY_PATH }}
+#          oci-cli-version: "latest"
+#          kubectl-version: "latest"
+#          cluster-id: ${{ secrets.OCI_CLUSTER_ID }}
+
       - name: Verify kubectl configuration
         run: kubectl cluster-info
-#      - name: Set up kubectl
-#        uses: azure/setup-kubectl@v3
-
-#      - name: Create kubeconfig
-#        run: |
-#          mkdir -p $HOME/.kube
-#          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-#          chmod 600 $HOME/.kube/config
 
       - name: Deploy PostgreSQL to Kubernetes
         run: |
