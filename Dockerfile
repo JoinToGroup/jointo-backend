@@ -1,7 +1,11 @@
-FROM openjdk:21-jdk
+FROM gradle:8.5-jdk21 AS build
+WORKDIR /app
+COPY . .
+RUN gradle build -x test
 
-# Copy the built JAR file from the target directory (after Gradle build)
-COPY build/libs/*.jar app.jar
+# ---- Run Stage ----
+FROM eclipse-temurin:21-jdk
+WORKDIR /app
+COPY --from=build /app/build/libs/*.jar app.jar
+ENTRYPOINT ["java", "-jar", "app.jar"]
 
-# Run the Spring Boot application
-ENTRYPOINT ["java", "-jar", "/app.jar"]
