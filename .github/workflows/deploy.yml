@@ -1,16 +1,16 @@
-name: Build and Deploy to Kubernetes
+name: Build on GitHub, Deploy to Self-Hosted Kubernetes
 
 on:
   push:
-    branches: [ main, feature-1 ]
+    branches: [ feature-1 ]
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   GITHUB_SHA: ${{ github.sha }}
 
 jobs:
-  build-and-deploy:
-    runs-on: self-hosted
+  build:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -42,6 +42,52 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/spring-app:${{ github.sha }}
 
+  deploy:
+    needs: build
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set GitHub SHA
+        run: echo "GITHUB_SHA=${{ github.sha }}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Verify kubectl configuration
+        run: kubectl cluster-info
+        shell: bash
+
+      - name: Deploy PostgreSQL to Kubernetes
+        run: |
+          kubectl apply -f k8s/postgres/postgres-configmap.yaml
+          kubectl apply -f k8s/postgres/postgres-secret.yaml
+          kubectl apply -f k8s/postgres/postgres-pvc.yaml
+          kubectl apply -f k8s/postgres/postgres-deployment.yaml
+          kubectl apply -f k8s/postgres/postgres-service.yaml
+        shell: bash
+
+      - name: Process deployment template
+        run: |
+          if (Test-Path "deployment.yaml") { Remove-Item "deployment.yaml" }
+          $content = Get-Content -Path k8s/app/deployment.yaml -Raw
+          $content = $content -replace '\$\{\{.*DOCKER_USERNAME.*\}\}', '${{ secrets.DOCKER_USERNAME }}'
+          $content = $content -replace '\$\{\{.*GITHUB_SHA.*\}\}', '${{ github.sha }}'
+          $content | Out-File -FilePath deployment.yaml -Encoding utf8
+        shell: pwsh
+
+      - name: Deploy Spring Boot to Kubernetes
+        run: |
+          kubectl apply -f deployment.yaml
+          kubectl apply -f k8s/app/configmap.yaml
+          kubectl apply -f k8s/app/service.yaml
+        shell: bash
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/spring-app
+        shell: bash
+
 #      If slh hosted will not work try to use OSI cloud
 #      - name: Set up kubectl for OCI
 #        uses: oracle-actions/setup-kubectl-oci@v1.0.1
@@ -51,25 +97,3 @@ jobs:
 #          oci-cli-version: "latest"
 #          kubectl-version: "latest"
 #          cluster-id: ${{ secrets.OCI_CLUSTER_ID }}
-
-      - name: Verify kubectl configuration
-        run: kubectl cluster-info
-
-      - name: Deploy PostgreSQL to Kubernetes
-        run: |
-          kubectl apply -f k8s/postgres/postgres-configmap.yaml
-          kubectl apply -f k8s/postgres/postgres-secret.yaml
-          kubectl apply -f k8s/postgres/postgres-pvc.yaml
-          kubectl apply -f k8s/postgres/postgres-deployment.yaml
-          kubectl apply -f k8s/postgres/postgres-service.yaml
-
-      - name: Deploy Spring Boot to Kubernetes
-        run: |
-          envsubst < k8s/app/deployment.yaml > deployment.yaml
-          kubectl apply -f deployment.yaml
-          kubectl apply -f k8s/app/configmap.yaml
-          kubectl apply -f k8s/app/service.yaml
-
-      - name: Verify deployment
-        run: |
-          kubectl rollout status deployment/spring-app
