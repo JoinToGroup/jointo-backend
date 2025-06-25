@@ -1,0 +1,100 @@
+name: Build on GitHub, Deploy to Self-Hosted Kubernetes
+
+on:
+  push:
+    branches: [ feature-1 ]
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  GITHUB_SHA: ${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build -x test
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/spring-app:${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set GitHub SHA
+        run: |
+          echo "GITHUB_SHA=${{ github.sha }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: powershell
+
+      - name: Verify kubectl configuration
+        run: kubectl cluster-info
+        shell: powershell
+
+      - name: Deploy PostgreSQL to Kubernetes
+        run: |
+          kubectl apply -f k8s/postgres/postgres-configmap.yaml
+          kubectl apply -f k8s/postgres/postgres-secret.yaml
+          kubectl apply -f k8s/postgres/postgres-pvc.yaml
+          kubectl apply -f k8s/postgres/postgres-deployment.yaml
+          kubectl apply -f k8s/postgres/postgres-service.yaml
+        shell: powershell
+
+      - name: Process deployment template
+        run: |
+          if (Test-Path "deployment.yaml") { Remove-Item "deployment.yaml" }
+          $content = Get-Content -Path k8s/app/deployment.yaml -Raw
+          $content = $content -replace '\$\{\{.*DOCKER_USERNAME.*\}\}', '${{ secrets.DOCKER_USERNAME }}'
+          $content = $content -replace '\$\{\{.*GITHUB_SHA.*\}\}', '${{ github.sha }}'
+          $content | Out-File -FilePath deployment.yaml -Encoding utf8
+        shell: powershell
+
+      - name: Deploy Spring Boot to Kubernetes
+        run: |
+          kubectl apply -f deployment.yaml
+          kubectl apply -f k8s/app/configmap.yaml
+          kubectl apply -f k8s/app/service.yaml
+        shell: powershell
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/spring-app
+        shell: powershell
+
+#      If slh hosted will not work try to use OSI cloud
+#      - name: Set up kubectl for OCI
+#        uses: oracle-actions/setup-kubectl-oci@v1.0.1
+#        with:
+#          oci-config-path: ${{ secrets.OCI_CONFIG_PATH }}
+#          oci-key-path: ${{ secrets.OCI_KEY_PATH }}
+#          oci-cli-version: "latest"
+#          kubectl-version: "latest"
+#          cluster-id: ${{ secrets.OCI_CLUSTER_ID }}
