@@ -1,0 +1,9 @@
+security:
+  jwt:
+    secret-key: 4eeab38d706831be4b36612ead768ef8182d1dd6f0e14e5dc934652e297fb162
+    # 1h in millisecond
+    access-token-expiration: 3600000
+    refresh-token-expiration: 3600000
+
+cors:
+  allowed-origins: '*'

@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/joindb
+    username: user
+    password: password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 30000
+      max-lifetime: 60000
+      connection-timeout: 30000
+
+security:
+  jwt:
+    secret-key: 4eeab38d706831be4b36612ead768ef8182d1dd6f0e14e5dc934652e297fb162
+    # 1h in millisecond
+    access-token-expiration: 3600000
+    refresh-token-expiration: 36000000
+
+cors:
+  allowed-origins: '*'
